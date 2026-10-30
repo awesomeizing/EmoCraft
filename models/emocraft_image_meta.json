@@ -1,0 +1,14 @@
+{
+  "class_names": [
+    "angry",
+    "disgust",
+    "fear",
+    "happy",
+    "neutral",
+    "sad",
+    "surprise"
+  ],
+  "image_size": 48,
+  "num_classes": 7,
+  "model_stem": "emocraft_image"
+}

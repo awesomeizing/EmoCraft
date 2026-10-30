@@ -1,0 +1,77 @@
+{
+  "dataset": "FER2013 (msambare/fer2013, Kaggle)",
+  "split": "train + 10% val withheld from train; test is official FER2013 test",
+  "class_names": [
+    "angry",
+    "disgust",
+    "fear",
+    "happy",
+    "neutral",
+    "sad",
+    "surprise"
+  ],
+  "test_accuracy": 0.1903037057676233,
+  "test_balanced_accuracy": 0.15725285203456554,
+  "test_macro_f1": 0.0811593434760997,
+  "per_class": {
+    "angry": {
+      "precision": 0.125,
+      "recall": 0.0010438413361169101,
+      "f1-score": 0.002070393374741201,
+      "support": 958.0
+    },
+    "disgust": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 111.0
+    },
+    "fear": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 1024.0
+    },
+    "happy": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 1774.0
+    },
+    "neutral": {
+      "precision": 0.20626151012891344,
+      "recall": 0.45417680454176806,
+      "f1-score": 0.28368794326241137,
+      "support": 1233.0
+    },
+    "sad": {
+      "precision": 0.18069584736251404,
+      "recall": 0.6455493183640738,
+      "f1-score": 0.2823570676955454,
+      "support": 1247.0
+    },
+    "surprise": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 831.0
+    },
+    "accuracy": 0.1903037057676233,
+    "macro avg": {
+      "precision": 0.07313676535591822,
+      "recall": 0.15725285203456554,
+      "f1-score": 0.0811593434760997,
+      "support": 7178.0
+    },
+    "weighted avg": {
+      "precision": 0.08350489880886114,
+      "recall": 0.1903037057676233,
+      "f1-score": 0.09805933885649211,
+      "support": 7178.0
+    }
+  },
+  "epochs_run": 3,
+  "training_seconds": 313.0022225379944,
+  "model_path": "C:\\Users\\aweso\\OneDrive\\Desktop\\sun\\models\\emocraft_image.keras",
+  "note": "Accuracy on the FER2013 dataset. Real-world performance on new images depends on capture conditions and may differ significantly."
+}

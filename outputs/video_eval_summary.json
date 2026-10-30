@@ -1,0 +1,23 @@
+{
+  "dataset": "RAVDESS pilot (actors 05 train/val, 06 test). TWO ACTORS ONLY \u2014 not a reliable generalization estimate.",
+  "class_names": [
+    "angry",
+    "disgust",
+    "fear",
+    "happy",
+    "neutral",
+    "sad",
+    "surprise"
+  ],
+  "frame_accuracy": 0.07692307692307693,
+  "frame_balanced_accuracy": 0.14285714285714285,
+  "frame_macro_f1": 0.02040816326530612,
+  "clip_accuracy": 0.07692307692307693,
+  "clip_balanced_accuracy": 0.14285714285714285,
+  "clip_macro_f1": 0.02040816326530612,
+  "clips_evaluated": 52,
+  "epochs_run": 10,
+  "training_seconds": 13.8876633644104,
+  "model_path": "C:\\Users\\aweso\\OneDrive\\Desktop\\sun\\models\\emocraft_video.keras",
+  "warning": "RAVDESS pilot: two-actor results must NOT be interpreted as reliable generalization estimates."
+}

@@ -1,0 +1,34 @@
+# EmoCraft — Python dependencies
+# Install with:
+#   python -m pip install -r requirements.txt
+#
+# Tested on Python 3.14 (Windows)
+
+# Core ML
+tensorflow>=2.20.0
+keras>=3.10.0
+
+# Computer vision
+opencv-python>=5.0.0
+
+# Data science
+numpy>=2.0.0
+scikit-learn>=1.5.0
+scipy>=1.12.0
+pandas>=2.2.0
+
+# Image handling
+pillow>=10.0.0
+
+# Plotting
+matplotlib>=3.8.0
+
+# Web UI
+streamlit>=1.30.0
+
+# Progress bars
+tqdm>=4.65.0
+
+# Optional: Kaggle API for automated dataset download
+kaggle>=2.0.0
+

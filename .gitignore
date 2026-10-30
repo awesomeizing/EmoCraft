@@ -1,0 +1,32 @@
+# Virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Datasets (large files - keep out of GitHub)
+datasets/
+RAVDESS/
+*.zip
+*.tar.gz
+*.mp4
+*.flv
+*.avi
+
+# Intermediate training checkpoints
+*.weights.h5
+
+# OS & Editor generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
