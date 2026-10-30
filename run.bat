@@ -20,3 +20,4 @@ if errorlevel 1 (
     echo [ERROR] An error occurred while running EmoCraft.
     pause
 )
+
