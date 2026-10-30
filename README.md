@@ -5,14 +5,25 @@ Built on TensorFlow/Keras with a custom CNN, OpenCV YuNet face detection, and a 
 
 ---
 
-## Quick start (after training)
+## Quick start (One-Click Launch)
+
+Simply double-click **`run.bat`** in the project folder, or run:
 
 ```bat
 cd C:\Users\aweso\OneDrive\Desktop\sun
-streamlit run app.py
+.\run.bat
 ```
 
-Open your browser at **http://localhost:8501**
+or via Python:
+
+```bat
+python run.py
+```
+
+This automatically:
+1. Verifies the environment and models
+2. Automatically opens your default web browser to **http://localhost:8501**
+3. Starts the Streamlit application server
 
 ---
 
