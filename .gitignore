@@ -12,10 +12,14 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 
-# Datasets (large files - keep out of GitHub)
-datasets/
+# Datasets (track fer2013.zip, keep loose extracted folders and video archives out)
+datasets/*
+!datasets/fer2013/
+datasets/fer2013/*
+!datasets/fer2013/fer2013.zip
 RAVDESS/
 *.zip
+!datasets/fer2013/fer2013.zip
 *.tar.gz
 *.mp4
 *.flv
