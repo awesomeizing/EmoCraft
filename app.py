@@ -37,6 +37,7 @@ sys.path.insert(0, str(_HERE))
 from emocraft import config
 from emocraft.model import load_model
 from emocraft.inference import predict_image, predict_video, write_annotated_video
+from emocraft.hsemotion import HSEmotionONNX, ImageHSEEnsemble
 
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -74,6 +75,15 @@ EMOTION_EMOJI = {
 def load_image_model():
     try:
         model, meta = load_model(config.MODELS_DIR, "emocraft_image")
+        hse_weight = float(meta.get("hse_ensemble_weight", 0.0))
+        if hse_weight > 0 and config.HSE_EXPRESSION_MODEL.is_file():
+            hse_model = HSEmotionONNX(config.HSE_EXPRESSION_MODEL)
+            model = ImageHSEEnsemble(model, hse_model, hse_weight)
+            meta["backend"] = "image_hse_ensemble"
+        elif hse_weight > 0:
+            # Keep inference available if the optional pretrained asset was removed.
+            meta["backend"] = "keras"
+            meta["ensemble_warning"] = f"HSEmotion asset not found: {config.HSE_EXPRESSION_MODEL}"
         return model, meta, None
     except FileNotFoundError as e:
         return None, None, str(e)
@@ -84,14 +94,51 @@ def load_image_model():
 @st.cache_resource(show_spinner="Loading video emotion model...")
 def load_video_model():
     try:
-        model, meta = load_model(config.MODELS_DIR, "emocraft_video")
+        legacy_meta_path = config.MODELS_DIR / "emocraft_video_meta.json"
+        legacy_meta = {}
+        if legacy_meta_path.is_file():
+            try:
+                legacy_meta = json.loads(legacy_meta_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                legacy_meta = {}
+
         summary_path = config.OUTPUTS_DIR / "video_eval_summary.json"
+        summary_dataset = ""
         if summary_path.is_file():
             try:
-                summary = json.loads(summary_path.read_text(encoding="utf-8"))
-                meta.setdefault("training_dataset", summary.get("dataset", ""))
+                summary_dataset = json.loads(summary_path.read_text(encoding="utf-8")).get("dataset", "")
             except (OSError, ValueError):
                 pass
+        legacy_dataset = legacy_meta.get("training_dataset") or summary_dataset
+        legacy_is_pilot = "RAVDESS" in legacy_dataset.upper() and "PILOT" in legacy_dataset.upper()
+        if not legacy_is_pilot:
+            try:
+                model, meta = load_model(config.MODELS_DIR, "emocraft_video")
+                if summary_path.is_file():
+                    try:
+                        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                        meta.setdefault("training_dataset", summary.get("dataset", ""))
+                    except (OSError, ValueError):
+                        pass
+                return model, meta, None
+            except FileNotFoundError:
+                pass
+
+        if config.HSE_EXPRESSION_MODEL.is_file():
+            model = HSEmotionONNX(config.HSE_EXPRESSION_MODEL)
+            meta_path = config.MODELS_DIR / "emocraft_video_hse_meta.json"
+            if meta_path.is_file():
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            else:
+                meta = {
+                    "class_names": HSEmotionONNX.class_names,
+                    "image_size": HSEmotionONNX.input_size,
+                    "backend": "hsemotion_onnx",
+                    "training_dataset": "HSEmotion AFEW pretrained facial-expression model",
+                }
+            return model, meta, None
+
+        model, meta = load_model(config.MODELS_DIR, "emocraft_video")
         return model, meta, None
     except FileNotFoundError:
         return None, None, None  # Not trained yet — silently skip
@@ -243,6 +290,8 @@ def render_image_tab() -> None:
             return
 
         result_badge(result["label"], result["confidence"])
+        if img_meta.get("ensemble_warning"):
+            st.warning(img_meta["ensemble_warning"])
         st.divider()
         if not result["face_found"]:
             st.caption("ℹ Image treated as pre-cropped face (no bounding box detected).")
@@ -261,8 +310,8 @@ def render_image_tab() -> None:
 def render_video_tab() -> None:
     st.header("🎬 Video Emotion Recognition")
 
-    # A two-actor RAVDESS model is only a pilot; prefer the larger image model
-    # frame by frame until a video model has been trained on a broad actor set.
+    # Skip a two-actor RAVDESS CNN pilot. Prefer a broad actor-disjoint project
+    # video model when present, otherwise use the bundled HSEmotion frame model.
     vid_model, vid_meta, vid_err = load_video_model()
     img_model, img_meta, img_err = load_image_model()
     video_is_pilot = (
@@ -297,6 +346,10 @@ def render_video_tab() -> None:
         return
 
     st.caption(f"Using: **{model_label}** · Classes: {', '.join(active_meta['class_names'])}")
+    if active_meta.get("backend") == "hsemotion_onnx":
+        st.caption("Frame scores are averaged across detected faces to reduce single-frame prediction swings.")
+        if active_meta.get("ravdess_pilot_diagnostic"):
+            st.caption("Available local video check: two RAVDESS actors only; diagnostic, not a generalization estimate.")
 
     col_a, col_b = st.columns([1, 1])
     with col_a:
@@ -399,12 +452,14 @@ def render_video_tab() -> None:
 def render_about_tab() -> None:
     st.header("ℹ About EmoCraft")
     st.markdown("""
-    **EmoCraft** is a facial emotion recognition system that uses a convolutional
-    neural network trained on the FER2013 dataset.
+    **EmoCraft** estimates facial expressions from images and sampled video frames.
+    Images use a validation-calibrated FER2013 CNN blended with HSEmotion. Videos use
+    HSEmotion per frame and average the scores over the clip.
 
     ### Architecture
-    - Custom lightweight CNN (5 conv layers + global average pooling)
-    - Input: 48×48 grayscale face crops
+    - Image: FER2013 CNN with horizontal-flip averaging and a validation-selected HSEmotion blend
+    - Video: HSEmotion EfficientNet-B0 ONNX model with mean-probability frame aggregation
+    - Image CNN input: 48×48 grayscale face crops; HSEmotion input: 224×224 RGB face crops
     - Face detection: OpenCV YuNet (FaceDetectorYN) — no Haar cascades needed
     - Training: TensorFlow/Keras with class-weighted loss, early stopping, LR scheduling
 
@@ -414,6 +469,7 @@ def render_about_tab() -> None:
     | FER2013 | Image model training | 7 (angry, disgust, fear, happy, neutral, sad, surprise) | Research use (Kaggle competition) |
     | CREMA-D | Video model training (preferred) | 6 (no surprise) | Open Database Licence (ODbL) v1.0 |
     | RAVDESS | Pilot/demo fallback (2 actors only) | 7 | CC BY-NC-SA 4.0 |
+    | HSEmotion AFEW | Pretrained expression model | 8 (contempt is omitted at inference) | Apache-2.0 |
 
     **FER2013** citation:
     > Goodfellow, I. J., et al. (2013). Challenges in Representation Learning: A report on
@@ -436,8 +492,9 @@ def render_about_tab() -> None:
     - No silent remapping: the app always displays which model is active.
 
     ### Honest limitations
-    - FER2013 test accuracy is typically **60–68%** for CNN baselines (benchmark is hard).
-    - The RAVDESS 2-actor pilot is **not** production accuracy — it is a smoke test only.
+    - FER2013 is a low-resolution, difficult benchmark; results on personal photos can differ.
+    - The RAVDESS 2-actor pilot is **not** a reliable production accuracy estimate.
+    - The HSEmotion model was trained on a different dataset; label and recording style shifts can change results.
     - Performance on real-world images/videos can differ significantly from benchmark results.
     """)
 

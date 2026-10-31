@@ -10,5 +10,25 @@
   ],
   "image_size": 48,
   "num_classes": 7,
-  "model_stem": "emocraft_image"
+  "model_stem": "emocraft_image",
+  "decision_bias": [
+    0.3499999940395355,
+    0.0,
+    0.44999998807907104,
+    0.0,
+    0.0,
+    0.3499999940395355,
+    0.0
+  ],
+  "calibration_target_classes": [
+    "angry",
+    "fear",
+    "sad"
+  ],
+  "calibration_method": "Coordinate search maximizing angry/fear/sad macro-F1 after the image ensemble on FER2013 validation split",
+  "backend": "image_hse_ensemble",
+  "hse_ensemble_weight": 0.45,
+  "hse_model": "enet_b0_8_best_afew.onnx",
+  "hse_model_source": "https://github.com/sb-ai-lab/EmotiEffLib/tree/main/models/affectnet_emotions/onnx",
+  "hse_model_license": "Apache-2.0"
 }

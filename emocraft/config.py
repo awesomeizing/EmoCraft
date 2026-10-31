@@ -52,6 +52,13 @@ FACE_DETECTOR_MODEL: Path = Path(
                    str(MODELS_DIR / "face_detection_yunet_2023mar.onnx"))
 ).expanduser().resolve()
 
+HSE_EXPRESSION_MODEL: Path = Path(
+    os.environ.get(
+        "EMOCRAFT_HSE_EXPRESSION_MODEL",
+        str(MODELS_DIR / "enet_b0_8_best_afew.onnx"),
+    )
+).expanduser().resolve()
+
 # ── Training hyperparameters ─────────────────────────────────────────────────
 IMAGE_SIZE: int = int(os.environ.get("EMOCRAFT_IMAGE_SIZE", "48"))
 BATCH_SIZE: int = int(os.environ.get("EMOCRAFT_BATCH_SIZE", "64"))

@@ -13,6 +13,7 @@ from typing import Optional
 
 import cv2
 import numpy as np
+from emocraft.calibration import apply_decision_bias
 
 
 # ── Image inference ───────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ def predict_image(
       - 'annotated_bgr': annotated BGR image as np.ndarray (for display)
       - 'error': None or error message string
     """
-    from emocraft.face_detector import crop_face, detect_faces
+    from emocraft.face_detector import detect_faces
 
     class_names: list[str] = meta["class_names"]
     image_size: int = meta["image_size"]
@@ -45,18 +46,21 @@ def predict_image(
     if bgr is None:
         return _error_result("Could not decode image. Please upload a valid JPEG or PNG.", class_names)
 
-    # Detect faces
-    boxes = detect_faces(bgr, face_model_path)
+    # Small FER-style inputs are already face crops; running YuNet on them can
+    # select a partial face and shift the expression evidence.
+    h, w = bgr.shape[:2]
+    is_pre_cropped = max(h, w) <= 128
+    boxes = [] if is_pre_cropped else detect_faces(bgr, face_model_path)
 
     if not boxes:
         # No face found — try treating the full image as a pre-cropped face
         # (handles 48×48 FER-style crops and passport-style close-ups)
-        h, w = bgr.shape[:2]
-        if max(h, w) <= 128:
+        if is_pre_cropped:
             # Assume pre-cropped
             gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
             crop_f32 = cv2.resize(gray, (image_size, image_size),
                                   interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
+            face_bgr = bgr
             annotated = bgr.copy()
             cv2.putText(annotated, "[pre-cropped]", (2, 12),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1, cv2.LINE_AA)
@@ -67,12 +71,7 @@ def predict_image(
     else:
         x, y, fw, fh = boxes[0]
         # margin
-        mx = int(0.15 * fw)
-        my = int(0.15 * fh)
-        x1 = max(0, x - mx);  y1 = max(0, y - my)
-        x2 = min(bgr.shape[1], x + fw + mx)
-        y2 = min(bgr.shape[0], y + fh + my)
-        face_bgr = bgr[y1:y2, x1:x2]
+        face_bgr = _crop_with_margin(bgr, (x, y, fw, fh))
         gray = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2GRAY)
         crop_f32 = cv2.resize(gray, (image_size, image_size),
                                interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
@@ -81,8 +80,10 @@ def predict_image(
         face_found = True
 
     # Model inference
-    tensor = crop_f32[np.newaxis, :, :, np.newaxis]   # (1, H, W, 1)
-    probs = _predict_probabilities(model, crop_f32)    # (num_classes,)
+    if meta.get("backend") == "image_hse_ensemble":
+        probs = model.predict_face(face_bgr, crop_f32, meta.get("decision_bias"))
+    else:
+        probs = _predict_probabilities(model, crop_f32, meta.get("decision_bias"))
 
     idx = int(np.argmax(probs))
     label = class_names[idx]
@@ -123,8 +124,8 @@ def predict_video(
     Sample frames from a video, run per-frame inference, and aggregate.
 
     Returns a dict with keys:
-      - 'label': majority-vote emotion
-      - 'confidence': mean confidence of the majority class
+      - 'label': emotion with the highest mean probability across sampled frames
+      - 'confidence': mean probability of the selected class
       - 'all_scores': mean per-class scores across frames
       - 'per_frame': list of {frame_idx, label, confidence} for each processed frame
       - 'frames_processed': int
@@ -176,15 +177,19 @@ def predict_video(
 
             if boxes:
                 x, y, fw, fh = boxes[0]
-                mx = int(0.15 * fw);  my = int(0.15 * fh)
-                x1 = max(0, x - mx);  y1 = max(0, y - my)
-                x2 = min(bgr.shape[1], x + fw + mx)
-                y2 = min(bgr.shape[0], y + fh + my)
-                face_bgr = bgr[y1:y2, x1:x2]
-                gray = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2GRAY)
-                crop_f32 = cv2.resize(gray, (image_size, image_size),
-                                       interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
-                probs = _predict_probabilities(model, crop_f32)
+                if meta.get("backend") == "hsemotion_onnx":
+                    face_bgr = _crop_with_margin(bgr, (x, y, fw, fh))
+                    probs = model.predict_face(face_bgr)
+                else:
+                    mx = int(0.15 * fw);  my = int(0.15 * fh)
+                    x1 = max(0, x - mx);  y1 = max(0, y - my)
+                    x2 = min(bgr.shape[1], x + fw + mx)
+                    y2 = min(bgr.shape[0], y + fh + my)
+                    face_bgr = bgr[y1:y2, x1:x2]
+                    gray = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2GRAY)
+                    crop_f32 = cv2.resize(gray, (image_size, image_size),
+                                           interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
+                    probs = _predict_probabilities(model, crop_f32, meta.get("decision_bias"))
                 idx = int(np.argmax(probs))
                 label = class_names[idx]
                 conf = float(probs[idx])
@@ -192,7 +197,12 @@ def predict_video(
                 accumulated_probs += probs
                 frames_with_face += 1
 
-                per_frame.append({"frame_idx": fi, "label": label, "confidence": conf})
+                per_frame.append({
+                    "frame_idx": fi,
+                    "label": label,
+                    "confidence": conf,
+                    "all_scores": {c: float(probs[i]) for i, c in enumerate(class_names)},
+                })
 
                 # Annotate frame
                 cv2.rectangle(annotated, (x, y), (x + fw, y + fh), (0, 220, 0), 2)
@@ -269,12 +279,32 @@ def _error_result(msg: str, class_names: list[str]) -> dict:
     }
 
 
-def _predict_probabilities(model, crop_f32: np.ndarray) -> np.ndarray:
-    """Average predictions for a face crop and its horizontal mirror."""
+def _predict_probabilities(
+    model,
+    crop_f32: np.ndarray,
+    decision_bias: Optional[list[float]] = None,
+) -> np.ndarray:
+    """Average original/flip predictions and apply optional validation-calibrated class offsets."""
     crop = np.asarray(crop_f32, dtype=np.float32)
     variants = np.stack((crop, np.fliplr(crop)), axis=0)[..., np.newaxis]
     probabilities = model.predict(variants, verbose=0)
-    return np.asarray(probabilities, dtype=np.float32).mean(axis=0)
+    mean_probs = np.asarray(probabilities, dtype=np.float32).mean(axis=0)
+    return apply_decision_bias(mean_probs, decision_bias)
+
+
+def _crop_with_margin(
+    bgr: np.ndarray,
+    bbox: tuple[int, int, int, int],
+    margin_fraction: float = 0.15,
+) -> np.ndarray:
+    """Return a face crop with a small forehead/chin margin."""
+    x, y, fw, fh = bbox
+    mx = int(margin_fraction * fw)
+    my = int(margin_fraction * fh)
+    x1, y1 = max(0, x - mx), max(0, y - my)
+    x2 = min(bgr.shape[1], x + fw + mx)
+    y2 = min(bgr.shape[0], y + fh + my)
+    return bgr[y1:y2, x1:x2]
 
 
 def _video_error(msg: str, class_names: list[str]) -> dict:

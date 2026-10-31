@@ -10,64 +10,64 @@
     "sad",
     "surprise"
   ],
-  "test_accuracy": 0.5814990247979939,
-  "test_balanced_accuracy": 0.5288222563849322,
-  "test_macro_f1": 0.5200943278195147,
+  "test_accuracy": 0.6053218166620229,
+  "test_balanced_accuracy": 0.5297535346193217,
+  "test_macro_f1": 0.5450363947616366,
   "test_accuracy_without_flip_tta": 0.5756478127612148,
   "per_class": {
     "angry": {
-      "precision": 0.4928400954653938,
-      "recall": 0.4311064718162839,
-      "f1-score": 0.4599109131403118,
+      "precision": 0.5258126195028681,
+      "recall": 0.5741127348643006,
+      "f1-score": 0.5489021956087824,
       "support": 958.0
     },
     "disgust": {
-      "precision": 0.34545454545454546,
-      "recall": 0.34234234234234234,
-      "f1-score": 0.3438914027149321,
+      "precision": 0.43333333333333335,
+      "recall": 0.23423423423423423,
+      "f1-score": 0.30409356725146197,
       "support": 111.0
     },
     "fear": {
-      "precision": 0.40625,
-      "recall": 0.177734375,
-      "f1-score": 0.24728260869565216,
+      "precision": 0.34167385677308026,
+      "recall": 0.38671875,
+      "f1-score": 0.36280348144754926,
       "support": 1024.0
     },
     "happy": {
-      "precision": 0.8302312464749013,
-      "recall": 0.8297632468996617,
-      "f1-score": 0.8299971807160981,
+      "precision": 0.8596881959910914,
+      "recall": 0.8703494926719278,
+      "f1-score": 0.8649859943977591,
       "support": 1774.0
     },
     "neutral": {
-      "precision": 0.49524413443246673,
-      "recall": 0.6334144363341444,
-      "f1-score": 0.5558718861209965,
+      "precision": 0.6128747795414462,
+      "recall": 0.5636658556366586,
+      "f1-score": 0.5872412336290663,
       "support": 1233.0
     },
     "sad": {
-      "precision": 0.42633637548891784,
-      "recall": 0.5244587008821171,
-      "f1-score": 0.4703344120819849,
+      "precision": 0.4906832298136646,
+      "recall": 0.570168404170008,
+      "f1-score": 0.5274480712166172,
       "support": 1247.0
     },
     "surprise": {
-      "precision": 0.7060133630289532,
-      "recall": 0.762936221419976,
-      "f1-score": 0.7333718912666282,
+      "precision": 0.7921348314606742,
+      "recall": 0.5090252707581228,
+      "f1-score": 0.6197802197802198,
       "support": 831.0
     },
-    "accuracy": 0.5814990247979939,
+    "accuracy": 0.6053218166620229,
     "macro avg": {
-      "precision": 0.528909965763597,
-      "recall": 0.5288222563849322,
-      "f1-score": 0.5200943278195147,
+      "precision": 0.5794572637737369,
+      "recall": 0.5297535346193217,
+      "f1-score": 0.5450363947616366,
       "support": 7178.0
     },
     "weighted avg": {
-      "precision": 0.5751311061458274,
-      "recall": 0.5814990247979939,
-      "f1-score": 0.5692014599443402,
+      "precision": 0.6203134597664588,
+      "recall": 0.6053218166620229,
+      "f1-score": 0.607750370149229,
       "support": 7178.0
     }
   },
@@ -77,5 +77,49 @@
   "training_stop": "Stopped at user request during epoch 35; best checkpoint from epoch 34 retained.",
   "model_path": "C:\\Users\\aweso\\OneDrive\\Desktop\\sun\\models\\emocraft_image.keras",
   "inference_note": "Evaluation averages original and horizontal-flip probabilities, matching app inference.",
-  "note": "FER2013 held-out accuracy; real-world performance can differ. The requested 85% target was not reached."
+  "note": "FER2013 held-out accuracy; real-world performance can differ. The requested 85% target was not reached.",
+  "test_accuracy_without_calibration": 0.5814990247979939,
+  "decision_bias": {
+    "angry": 0.3499999940395355,
+    "disgust": 0.0,
+    "fear": 0.44999998807907104,
+    "happy": 0.0,
+    "neutral": 0.0,
+    "sad": 0.3499999940395355,
+    "surprise": 0.0
+  },
+  "calibration_target_classes": [
+    "angry",
+    "fear",
+    "sad"
+  ],
+  "calibration_method": "Coordinate search maximizing angry/fear/sad macro-F1 after the image ensemble on FER2013 validation split",
+  "test_metric_status": "Diagnostic only: the official FER2013 test split was examined during earlier model comparisons in this task; use the training validation split for model selection.",
+  "evaluation_model": "FER2013 CNN + HSEmotion AFEW ensemble",
+  "hse_ensemble_weight": 0.45,
+  "validation_calibration_fit_metrics": {
+    "accuracy": 0.6248697311041445,
+    "balanced_accuracy": 0.5481518445670312,
+    "macro_f1": 0.5616801670977388,
+    "target_macro_f1": 0.5222,
+    "per_class_recall": {
+      "angry": 0.6115,
+      "fear": 0.4366,
+      "sad": 0.6046,
+      "neutral": 0.5726
+    },
+    "note": "Calibration-fit diagnostics on the same validation split used to select blend weight and offsets."
+  },
+  "test_accuracy_keras_uncalibrated": 0.5814990247979939,
+  "test_accuracy_keras_calibrated": 0.5750905544719978,
+  "prediction_counts": {
+    "angry": 1046,
+    "disgust": 60,
+    "fear": 1159,
+    "happy": 1796,
+    "neutral": 1134,
+    "sad": 1449,
+    "surprise": 534
+  },
+  "test_accuracy_calibrated_keras_only": 0.5750905544719978
 }

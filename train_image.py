@@ -38,7 +38,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from emocraft import config
+from emocraft.calibration import apply_decision_bias, tune_target_class_bias
 from emocraft.fer2013_data import verify_fer2013, make_keras_generators
+from emocraft.hsemotion import HSEmotionONNX, tune_hse_ensemble_weight
 from emocraft.model import build_emotion_cnn, save_model
 
 
@@ -236,9 +238,66 @@ def main() -> None:
     print(f"\n[train] Training complete in {elapsed/60:.1f} min")
 
     # ── Evaluate on test set ──────────────────────────────────────────────────
-    print("\n[eval] Evaluating on held-out test set ...")
-    probs = model.predict(test_x, batch_size=args.batch_size, verbose=1)
+    print("\n[calibration] Evaluating app-matched image predictions on validation data ...")
+    val_probs = (
+        model.predict(val_x, batch_size=args.batch_size, verbose=1)
+        + model.predict(np.flip(val_x, axis=2), batch_size=args.batch_size, verbose=1)
+    ) / 2.0
+
+    hse_model = None
+    hse_weight = 0.0
+    hse_val_probs = None
+    if config.HSE_EXPRESSION_MODEL.is_file():
+        try:
+            print("[calibration] Comparing HSEmotion blend weights on validation images ...")
+            hse_model = HSEmotionONNX(config.HSE_EXPRESSION_MODEL)
+            hse_val_probs = hse_model.predict_gray_batch(val_x)
+            hse_weight = tune_hse_ensemble_weight(
+                val_probs, hse_val_probs, val_y, class_names
+            )
+            print(f"[calibration] Selected HSEmotion image weight: {hse_weight:.2f}")
+        except Exception as exc:
+            print(f"[calibration] HSEmotion blend unavailable; keeping the FER2013 CNN: {exc}")
+            hse_model = None
+            hse_weight = 0.0
+            hse_val_probs = None
+
+    validation_ensemble_probs = val_probs
+    if hse_model is not None and hse_weight > 0.0 and hse_val_probs is not None:
+        validation_ensemble_probs = (
+            (1.0 - hse_weight) * val_probs + hse_weight * hse_val_probs
+        )
+    print("[calibration] Tuning angry/fear/sad offsets after the final image ensemble ...")
+    decision_bias = tune_target_class_bias(validation_ensemble_probs, val_y, class_names)
+    print(f"[calibration] Decision offsets: {dict(zip(class_names, [round(v, 2) for v in decision_bias]))}")
+    calibrated_val_probs = apply_decision_bias(validation_ensemble_probs, decision_bias)
+    val_pred = np.argmax(calibrated_val_probs, axis=1)
+    val_report = classification_report(
+        val_y, val_pred, target_names=class_names, output_dict=True, zero_division=0
+    )
+    validation_calibration_metrics = {
+        "accuracy": accuracy_score(val_y, val_pred),
+        "balanced_accuracy": balanced_accuracy_score(val_y, val_pred),
+        "macro_f1": f1_score(val_y, val_pred, average="macro", zero_division=0),
+        "target_macro_f1": float(np.mean([
+            val_report[name]["f1-score"] for name in ("angry", "fear", "sad")
+        ])),
+        "per_class_recall": {name: val_report[name]["recall"] for name in class_names},
+        "note": "Calibration-fit diagnostics on the same validation split used to select blend weight and offsets.",
+    }
+
+    print("\n[eval] Evaluating on held-out test set with app-matched flip averaging ...")
+    raw_probs = (
+        model.predict(test_x, batch_size=args.batch_size, verbose=1)
+        + model.predict(np.flip(test_x, axis=2), batch_size=args.batch_size, verbose=1)
+    ) / 2.0
+    probs = raw_probs
+    if hse_model is not None and hse_weight > 0.0:
+        hse_test_probs = hse_model.predict_gray_batch(test_x)
+        probs = (1.0 - hse_weight) * raw_probs + hse_weight * hse_test_probs
+    probs = apply_decision_bias(probs, decision_bias)
     y_pred = np.argmax(probs, axis=1)
+    y_pred_uncalibrated = np.argmax(raw_probs, axis=1)
     y_true = test_y
 
     acc = accuracy_score(y_true, y_pred)
@@ -255,7 +314,17 @@ def main() -> None:
 
     # ── Save model + metadata ─────────────────────────────────────────────────
     weights_path, meta_path = save_model(
-        model, class_names, args.image_size, args.models_dir, "emocraft_image"
+        model, class_names, args.image_size, args.models_dir, "emocraft_image",
+        extra_meta={
+            "decision_bias": decision_bias,
+            "calibration_target_classes": ["angry", "fear", "sad"],
+            "calibration_method": "coordinate search maximizing target-class macro-F1 after the image ensemble on validation split",
+            "backend": "image_hse_ensemble" if hse_weight > 0.0 else "keras",
+            "hse_ensemble_weight": hse_weight,
+            "hse_model": "enet_b0_8_best_afew.onnx" if hse_weight > 0.0 else None,
+            "hse_model_source": "https://github.com/sb-ai-lab/EmotiEffLib/tree/main/models/affectnet_emotions/onnx" if hse_weight > 0.0 else None,
+            "hse_model_license": "Apache-2.0" if hse_weight > 0.0 else None,
+        },
     )
 
     # ── Save plots ────────────────────────────────────────────────────────────
@@ -270,8 +339,17 @@ def main() -> None:
         "split": "train + 10% val withheld from train; test is official FER2013 test",
         "class_names": class_names,
         "test_accuracy": acc,
+        "test_accuracy_without_calibration": accuracy_score(y_true, y_pred_uncalibrated),
+        "test_accuracy_keras_uncalibrated": accuracy_score(y_true, y_pred_uncalibrated),
+        "test_accuracy_calibrated_keras_only": accuracy_score(
+            y_true, apply_decision_bias(raw_probs, decision_bias).argmax(axis=1)
+        ),
         "test_balanced_accuracy": bal_acc,
         "test_macro_f1": macro_f1,
+        "decision_bias": dict(zip(class_names, [float(v) for v in decision_bias])),
+        "hse_ensemble_weight": hse_weight,
+        "evaluation_model": "calibrated FER2013 CNN + HSEmotion ensemble" if hse_weight > 0.0 else "calibrated FER2013 CNN",
+        "validation_calibration_fit_metrics": validation_calibration_metrics,
         "per_class": json.loads(
             classification_report(y_true, y_pred,
                                   target_names=class_names,

@@ -1,0 +1,33 @@
+{
+  "class_names": [
+    "angry",
+    "disgust",
+    "fear",
+    "happy",
+    "neutral",
+    "sad",
+    "surprise"
+  ],
+  "image_size": 224,
+  "num_classes": 7,
+  "backend": "hsemotion_onnx",
+  "model_stem": "enet_b0_8_best_afew",
+  "training_dataset": "HSEmotion EfficientNet-B0 AFEW pretrained facial-expression model",
+  "source_model": "https://github.com/sb-ai-lab/EmotiEffLib/tree/main/models/affectnet_emotions/onnx",
+  "source_license": "Apache-2.0",
+  "preprocessing": "Detected face crop with 15% margin, center-trimmed by 8% per edge; RGB; resize to 224x224; ImageNet channel normalization",
+  "output_mapping": "Drops contempt and maps the remaining AFEW outputs to FER2013's seven labels",
+  "video_aggregation": "Mean class probabilities across sampled frames",
+  "ravdess_pilot_diagnostic": {
+    "split": "actor 05 used for blend comparison; actor 06 held out",
+    "clips_evaluated": 52,
+    "accuracy": 0.7884615384615384,
+    "balanced_accuracy": 0.8035714285714286,
+    "macro_f1": 0.7686979895626511,
+    "angry_recall": 1.0,
+    "fear_recall": 0.625,
+    "sad_recall": 0.875,
+    "neutral_recall": 1.0,
+    "warning": "Only two RAVDESS actors are present. Actor 06 was consulted during model comparison, so these values are diagnostic and not an unbiased generalization estimate."
+  }
+}

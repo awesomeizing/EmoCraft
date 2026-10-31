@@ -82,6 +82,7 @@ def save_model(
     image_size: int,
     save_dir: Path,
     model_stem: str = "emocraft_image",
+    extra_meta: Optional[dict] = None,
 ) -> tuple[Path, Path]:
     """
     Save the Keras model weights (.keras) and a metadata JSON alongside it.
@@ -110,6 +111,8 @@ def save_model(
         "num_classes": len(class_names),
         "model_stem": model_stem,
     }
+    if extra_meta:
+        meta.update(extra_meta)
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(f"[model] Saved weights -> {weights_path}")
     print(f"[model] Saved metadata -> {meta_path}")

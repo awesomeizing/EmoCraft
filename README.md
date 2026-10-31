@@ -1,7 +1,8 @@
 # EmoCraft — Facial Emotion Recognition
 
-A complete local application for facial emotion recognition from images and videos.
-Built on TensorFlow/Keras with a custom CNN, OpenCV YuNet face detection, and a Streamlit UI.
+A complete local application for facial expression recognition from images and videos.
+Images use a validation-calibrated FER2013 CNN and HSEmotion ensemble; videos use
+HSEmotion scores averaged across sampled frames. Face detection uses OpenCV YuNet.
 
 ---
 
@@ -59,6 +60,9 @@ C:\Users\aweso\AppData\Local\Programs\Python\Python314\python.exe smoke_test.py
 - **Split used**: official `train/` (28,709 images) and `test/` (7,178 images)
   - 10% of `train/` is withheld for validation (stratified by class)
   - `test/` is **never** used during training
+
+The deployed image predictor blends the FER2013 CNN with HSEmotion. The blend
+weight is selected from the FER2013 validation split by `train_image.py`.
 
 **How to get it:**
 
@@ -122,6 +126,14 @@ Or edit `emocraft/config.py` and update `CREMAD_DIR`.
 > Livingstone, S. R. & Russo, F. A. (2018). The Ryerson Audio-Visual Database of
 > Emotional Speech and Song (RAVDESS). PLoS ONE 13(5): e0196391.
 
+### Pretrained expression model
+
+`models\enet_b0_8_best_afew.onnx` is the HSEmotion EfficientNet-B0 AFEW model,
+used for video frames and as part of the image ensemble. Its eight outputs include
+contempt; inference removes that label to match EmoCraft's seven-class output.
+The model is included in the Apache-2.0 [EmotiEffLib model collection](https://github.com/sb-ai-lab/EmotiEffLib/tree/main/models/affectnet_emotions/onnx)
+and uses the [HSEmotion ONNX inference format](https://github.com/av-savchenko/hsemotion-onnx).
+
 ---
 
 ## Training
@@ -144,7 +156,7 @@ Options:
 
 Saved artefacts:
 - `models\emocraft_image.keras`      — model weights
-- `models\emocraft_image_meta.json`  — class list + image size
+- `models\emocraft_image_meta.json`  — labels, calibration, and selected HSE blend weight
 - `outputs\image_training_curves.png`
 - `outputs\image_confusion_matrix.png`
 - `outputs\image_eval_summary.json`
@@ -154,6 +166,11 @@ class weights are smoothed so the rare disgust class is represented without
 letting its small sample count overwhelm the other labels.
 
 ### Video model (CREMA-D or RAVDESS fallback)
+
+The app uses the included HSEmotion ONNX model for video inference by default.
+`train_video.py` can still train a project-specific Keras model if CREMA-D or
+RAVDESS data is available; only a broad actor-disjoint dataset should be used to
+judge whether it generalizes.
 
 ```bat
 C:\Users\aweso\AppData\Local\Programs\Python\Python314\python.exe train_video.py
@@ -207,6 +224,7 @@ sun\
 │   ├── model.py                CNN architecture + save/load helpers
 │   ├── face_detector.py        YuNet face detection (cv2.FaceDetectorYN)
 │   ├── inference.py            Image + video prediction pipeline
+│   ├── hsemotion.py             HSEmotion ONNX inference + image ensemble
 │   ├── fer2013_data.py         FER2013 dataset utilities
 │   ├── cremad_data.py          CREMA-D dataset utilities
 │   └── ravdess_data.py         RAVDESS dataset utilities (pilot fallback)
@@ -217,6 +235,7 @@ sun\
 │
 ├── models\                     Saved model weights and metadata
 │   ├── face_detection_yunet_2023mar.onnx
+│   ├── enet_b0_8_best_afew.onnx HSEmotion pretrained expression model
 │   ├── emocraft_image.keras
 │   ├── emocraft_image_meta.json
 │   ├── emocraft_video.keras    (if video model trained)
@@ -244,6 +263,7 @@ sun\
 | `EMOCRAFT_RAVDESS_DIR` | `RAVDESS/` | RAVDESS ZIPs directory |
 | `EMOCRAFT_MODELS_DIR` | `models/` | Where trained models are saved/loaded |
 | `EMOCRAFT_FACE_MODEL` | `models/face_detection_yunet_2023mar.onnx` | YuNet ONNX path |
+| `EMOCRAFT_HSE_EXPRESSION_MODEL` | `models/enet_b0_8_best_afew.onnx` | HSEmotion ONNX path |
 | `EMOCRAFT_IMAGE_SIZE` | `48` | CNN input size (px) |
 | `EMOCRAFT_BATCH_SIZE` | `64` | Training batch size |
 | `EMOCRAFT_EPOCHS` | `50` | Max training epochs |
@@ -272,14 +292,22 @@ Each model's class list is saved in its `_meta.json` file and loaded at inferenc
 
 ## Honest performance expectations
 
-FER2013 is a notoriously hard benchmark:
-- Human agreement is ~65%
-- CNN baselines typically achieve **60–68% accuracy** on the test set
-- Class imbalance (disgust has only ~1.5% of samples) makes balanced accuracy lower
+FER2013 and real-world videos differ in resolution, pose, lighting, and label
+conventions. The app reports expression scores, not a reliable measurement of a
+person's internal emotional state.
 
-The **RAVDESS 2-actor pilot** achieved:
-- Clip accuracy: **7.7%** (near-random)
-- This is expected — two actors cannot train a generalizing model
+The current image ensemble scored **60.5% accuracy** and **54.5% macro-F1** on
+the official FER2013 test split. Its angry, fear, sad, and neutral recalls were
+57%, 39%, 57%, and 56%. These are diagnostics rather than untouched final
+estimates because the test split was consulted during model comparisons. The
+model does not meet an 85% accuracy target.
+
+The available RAVDESS pilot contains only two actors. Its small clip set is useful
+for checking the inference pipeline, but it is not a reliable estimate of
+performance on new people. The current HSEmotion video path scored 78.8% on 52
+actor 06 clips, with angry/fear/sad/neutral recalls of 100%/63%/88%/100%; this
+actor was also consulted during model comparisons, so these figures should not
+be treated as generalization accuracy.
 
 For the **CREMA-D** video model (if trained):
 - Actor-disjoint evaluation is the right benchmark — new actors will be harder
