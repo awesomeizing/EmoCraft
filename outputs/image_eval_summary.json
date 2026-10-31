@@ -1,6 +1,6 @@
 {
   "dataset": "FER2013 (msambare/fer2013, Kaggle)",
-  "split": "train + 10% val withheld from train; test is official FER2013 test",
+  "split": "Official FER2013 test; training used train split with 10% validation held out",
   "class_names": [
     "angry",
     "disgust",
@@ -10,68 +10,72 @@
     "sad",
     "surprise"
   ],
-  "test_accuracy": 0.1903037057676233,
-  "test_balanced_accuracy": 0.15725285203456554,
-  "test_macro_f1": 0.0811593434760997,
+  "test_accuracy": 0.5814990247979939,
+  "test_balanced_accuracy": 0.5288222563849322,
+  "test_macro_f1": 0.5200943278195147,
+  "test_accuracy_without_flip_tta": 0.5756478127612148,
   "per_class": {
     "angry": {
-      "precision": 0.125,
-      "recall": 0.0010438413361169101,
-      "f1-score": 0.002070393374741201,
+      "precision": 0.4928400954653938,
+      "recall": 0.4311064718162839,
+      "f1-score": 0.4599109131403118,
       "support": 958.0
     },
     "disgust": {
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1-score": 0.0,
+      "precision": 0.34545454545454546,
+      "recall": 0.34234234234234234,
+      "f1-score": 0.3438914027149321,
       "support": 111.0
     },
     "fear": {
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1-score": 0.0,
+      "precision": 0.40625,
+      "recall": 0.177734375,
+      "f1-score": 0.24728260869565216,
       "support": 1024.0
     },
     "happy": {
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1-score": 0.0,
+      "precision": 0.8302312464749013,
+      "recall": 0.8297632468996617,
+      "f1-score": 0.8299971807160981,
       "support": 1774.0
     },
     "neutral": {
-      "precision": 0.20626151012891344,
-      "recall": 0.45417680454176806,
-      "f1-score": 0.28368794326241137,
+      "precision": 0.49524413443246673,
+      "recall": 0.6334144363341444,
+      "f1-score": 0.5558718861209965,
       "support": 1233.0
     },
     "sad": {
-      "precision": 0.18069584736251404,
-      "recall": 0.6455493183640738,
-      "f1-score": 0.2823570676955454,
+      "precision": 0.42633637548891784,
+      "recall": 0.5244587008821171,
+      "f1-score": 0.4703344120819849,
       "support": 1247.0
     },
     "surprise": {
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1-score": 0.0,
+      "precision": 0.7060133630289532,
+      "recall": 0.762936221419976,
+      "f1-score": 0.7333718912666282,
       "support": 831.0
     },
-    "accuracy": 0.1903037057676233,
+    "accuracy": 0.5814990247979939,
     "macro avg": {
-      "precision": 0.07313676535591822,
-      "recall": 0.15725285203456554,
-      "f1-score": 0.0811593434760997,
+      "precision": 0.528909965763597,
+      "recall": 0.5288222563849322,
+      "f1-score": 0.5200943278195147,
       "support": 7178.0
     },
     "weighted avg": {
-      "precision": 0.08350489880886114,
-      "recall": 0.1903037057676233,
-      "f1-score": 0.09805933885649211,
+      "precision": 0.5751311061458274,
+      "recall": 0.5814990247979939,
+      "f1-score": 0.5692014599443402,
       "support": 7178.0
     }
   },
-  "epochs_run": 3,
-  "training_seconds": 313.0022225379944,
+  "epochs_run": 34,
+  "epochs_this_run": 14,
+  "best_validation_accuracy": 0.57297,
+  "training_stop": "Stopped at user request during epoch 35; best checkpoint from epoch 34 retained.",
   "model_path": "C:\\Users\\aweso\\OneDrive\\Desktop\\sun\\models\\emocraft_image.keras",
-  "note": "Accuracy on the FER2013 dataset. Real-world performance on new images depends on capture conditions and may differ significantly."
+  "inference_note": "Evaluation averages original and horizontal-flip probabilities, matching app inference.",
+  "note": "FER2013 held-out accuracy; real-world performance can differ. The requested 85% target was not reached."
 }
