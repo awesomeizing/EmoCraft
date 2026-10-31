@@ -82,7 +82,7 @@ def predict_image(
 
     # Model inference
     tensor = crop_f32[np.newaxis, :, :, np.newaxis]   # (1, H, W, 1)
-    probs = model.predict(tensor, verbose=0)[0]        # (num_classes,)
+    probs = _predict_probabilities(model, crop_f32)    # (num_classes,)
 
     idx = int(np.argmax(probs))
     label = class_names[idx]
@@ -152,7 +152,13 @@ def predict_video(
 
         # Choose which frames to sample
         step = max(1, int(fps / target_fps))
-        frame_indices = list(range(0, total_frames, step))[:max_frames]
+        candidate_indices = np.arange(0, total_frames, step, dtype=np.int64)
+        if len(candidate_indices) > max_frames:
+            sample_positions = np.linspace(0, len(candidate_indices) - 1,
+                                           max_frames).round().astype(int)
+            frame_indices = candidate_indices[sample_positions].tolist()
+        else:
+            frame_indices = candidate_indices.tolist()
 
         per_frame = []
         annotated_frames = []
@@ -178,8 +184,7 @@ def predict_video(
                 gray = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2GRAY)
                 crop_f32 = cv2.resize(gray, (image_size, image_size),
                                        interpolation=cv2.INTER_AREA).astype(np.float32) / 255.0
-                tensor = crop_f32[np.newaxis, :, :, np.newaxis]
-                probs = model.predict(tensor, verbose=0)[0]
+                probs = _predict_probabilities(model, crop_f32)
                 idx = int(np.argmax(probs))
                 label = class_names[idx]
                 conf = float(probs[idx])
@@ -262,6 +267,14 @@ def _error_result(msg: str, class_names: list[str]) -> dict:
         "annotated_bgr": None,
         "error": msg,
     }
+
+
+def _predict_probabilities(model, crop_f32: np.ndarray) -> np.ndarray:
+    """Average predictions for a face crop and its horizontal mirror."""
+    crop = np.asarray(crop_f32, dtype=np.float32)
+    variants = np.stack((crop, np.fliplr(crop)), axis=0)[..., np.newaxis]
+    probabilities = model.predict(variants, verbose=0)
+    return np.asarray(probabilities, dtype=np.float32).mean(axis=0)
 
 
 def _video_error(msg: str, class_names: list[str]) -> dict:

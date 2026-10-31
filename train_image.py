@@ -29,9 +29,9 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-# Suppress TF/oneDNN log spam
+# Keep TensorFlow's optimized CPU kernels enabled unless the user overrides it.
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
-os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
+os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "1")
 
 # Add project root to path so `import emocraft` works
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -44,8 +44,8 @@ from emocraft.model import build_emotion_cnn, save_model
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Train EmoCraft image model on FER2013")
-    p.add_argument("--epochs", type=int, default=3)
-    p.add_argument("--batch-size", type=int, default=256)
+    p.add_argument("--epochs", type=int, default=config.EPOCHS)
+    p.add_argument("--batch-size", type=int, default=config.BATCH_SIZE)
     p.add_argument("--lr", type=float, default=config.LEARNING_RATE)
     p.add_argument("--fer-dir", type=Path, default=config.FER2013_DIR)
     p.add_argument("--models-dir", type=Path, default=config.MODELS_DIR)
@@ -53,6 +53,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--val-fraction", type=float, default=config.VAL_FRACTION)
     p.add_argument("--seed", type=int, default=config.SEED)
     p.add_argument("--image-size", type=int, default=config.IMAGE_SIZE)
+    p.add_argument("--resume", action="store_true",
+                   help="Continue from the saved image model; --epochs is the total target")
+    p.add_argument("--initial-epoch", type=int, default=None,
+                   help="Override the saved completed epoch count when resuming a weights checkpoint")
     p.add_argument("--no-verify", action="store_true",
                    help="Skip per-image file validation (faster but less safe)")
     return p.parse_args()
@@ -117,20 +121,66 @@ def main() -> None:
     print(f"Classes ({num_classes}): {class_names}")
     print(f"Samples: train={train_x.shape[0]}  |  val={val_x.shape[0]}  |  test={test_x.shape[0]}")
 
-    # ── Class weights (counteract imbalance) ──────────────────────────────────
+    # ── Smoothed class weights (help rare classes without letting them dominate) ──
     counts = np.bincount(train_y, minlength=num_classes).astype(np.float32)
     total = counts.sum()
-    class_weights = {i: float(total / (num_classes * max(counts[i], 1)))
-                     for i in range(num_classes)}
+    raw_weights = np.sqrt(total / (num_classes * np.maximum(counts, 1)))
+    raw_weights /= np.average(raw_weights, weights=counts)
+    class_weights = {i: float(raw_weights[i]) for i in range(num_classes)}
     print(f"\nClass weights: { {class_names[i]: round(v, 3) for i, v in class_weights.items()} }")
 
     # ── Build model ───────────────────────────────────────────────────────────
-    model = build_emotion_cnn(num_classes=num_classes, image_size=args.image_size)
-    model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=args.lr),
-        loss="sparse_categorical_crossentropy",
-        metrics=["accuracy"],
-    )
+    model_path = args.models_dir / "emocraft_image.keras"
+    prior_weights = None
+    prior_val_accuracy = None
+    initial_epoch = 0
+    if args.resume:
+        model = None
+        if model_path.is_file():
+            try:
+                candidate = keras.models.load_model(str(model_path))
+                candidate.get_layer("block1_conv1")
+                model = candidate
+            except (ValueError, KeyError):
+                model = None
+        if model is None:
+            model = build_emotion_cnn(num_classes=num_classes, image_size=args.image_size)
+            best_weights_path = args.models_dir / "emocraft_image_best.weights.h5"
+            if not best_weights_path.is_file():
+                raise FileNotFoundError(
+                    "Could not resume: neither a compatible saved model nor "
+                    f"best-weight checkpoint exists in {args.models_dir}"
+                )
+            model.load_weights(str(best_weights_path))
+            model.compile(
+                optimizer=keras.optimizers.Adam(learning_rate=args.lr),
+                loss="sparse_categorical_crossentropy",
+                metrics=["accuracy"],
+            )
+        prior_weights = model.get_weights()
+        prior_val_accuracy = accuracy_score(val_y, np.argmax(
+            model.predict(val_x, batch_size=args.batch_size, verbose=0), axis=1
+        ))
+        previous_summary = args.outputs_dir / "image_eval_summary.json"
+        if previous_summary.is_file():
+            previous = json.loads(previous_summary.read_text(encoding="utf-8"))
+            initial_epoch = int(previous.get("epochs_run", 0))
+        if args.initial_epoch is not None:
+            initial_epoch = args.initial_epoch
+        if args.epochs <= initial_epoch:
+            raise ValueError(
+                f"--epochs is the total target ({args.epochs}); it must exceed "
+                f"the saved model's {initial_epoch} completed epochs."
+            )
+        print(f"[resume] Starting from epoch {initial_epoch}; "
+              f"previous validation accuracy={prior_val_accuracy:.4f}")
+    else:
+        model = build_emotion_cnn(num_classes=num_classes, image_size=args.image_size)
+        model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=args.lr),
+            loss="sparse_categorical_crossentropy",
+            metrics=["accuracy"],
+        )
     model.summary()
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
@@ -142,11 +192,13 @@ def main() -> None:
             monitor="val_accuracy",
             save_best_only=True,
             save_weights_only=True,
+            initial_value_threshold=prior_val_accuracy,
             verbose=1,
         ),
         keras.callbacks.EarlyStopping(
             monitor="val_accuracy",
             patience=config.EARLY_STOP_PATIENCE,
+            baseline=prior_val_accuracy,
             restore_best_weights=True,
             verbose=1,
         ),
@@ -167,11 +219,19 @@ def main() -> None:
         train_y,
         validation_data=(val_x, val_y),
         epochs=args.epochs,
+        initial_epoch=initial_epoch,
         batch_size=args.batch_size,
         callbacks=callbacks,
         class_weight=class_weights,
         verbose=1,
     )
+    best_val_accuracy = max(
+        ([prior_val_accuracy] if prior_val_accuracy is not None else [])
+        + history.history["val_accuracy"]
+    )
+    if prior_weights is not None and max(history.history["val_accuracy"]) <= prior_val_accuracy:
+        # Keep the previous model if the continuation did not beat it.
+        model.set_weights(prior_weights)
     elapsed = time.time() - t0
     print(f"\n[train] Training complete in {elapsed/60:.1f} min")
 
@@ -221,7 +281,9 @@ def main() -> None:
             y_true, y_pred, target_names=class_names,
             output_dict=True, zero_division=0
         ),
-        "epochs_run": len(history.history["accuracy"]),
+        "epochs_run": initial_epoch + len(history.history["accuracy"]),
+        "epochs_this_run": len(history.history["accuracy"]),
+        "best_validation_accuracy": best_val_accuracy,
         "training_seconds": elapsed,
         "model_path": str(weights_path),
         "note": "Accuracy on the FER2013 dataset. Real-world performance on new images "

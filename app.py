@@ -16,6 +16,7 @@ Environment variables (optional):
 from __future__ import annotations
 
 import io
+import json
 import os
 import sys
 import tempfile
@@ -84,6 +85,13 @@ def load_image_model():
 def load_video_model():
     try:
         model, meta = load_model(config.MODELS_DIR, "emocraft_video")
+        summary_path = config.OUTPUTS_DIR / "video_eval_summary.json"
+        if summary_path.is_file():
+            try:
+                summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                meta.setdefault("training_dataset", summary.get("dataset", ""))
+            except (OSError, ValueError):
+                pass
         return model, meta, None
     except FileNotFoundError:
         return None, None, None  # Not trained yet — silently skip
@@ -253,18 +261,32 @@ def render_image_tab() -> None:
 def render_video_tab() -> None:
     st.header("🎬 Video Emotion Recognition")
 
-    # Prefer video-specific model; fall back to image model
+    # A two-actor RAVDESS model is only a pilot; prefer the larger image model
+    # frame by frame until a video model has been trained on a broad actor set.
     vid_model, vid_meta, vid_err = load_video_model()
     img_model, img_meta, img_err = load_image_model()
+    video_is_pilot = (
+        vid_model is not None
+        and "RAVDESS pilot" in vid_meta.get("training_dataset", "")
+    )
 
-    if vid_model is not None:
+    if vid_model is not None and not video_is_pilot:
         active_model, active_meta, model_label = vid_model, vid_meta, "video model"
     elif img_model is not None:
         active_model, active_meta, model_label = img_model, img_meta, "image model (used as fallback)"
-        st.warning(
-            "⚠ No video-specific model found. Using the image model as a fallback. "
-            "Train a dedicated video model with `python train_video.py` for better performance."
-        )
+        if video_is_pilot:
+            st.warning(
+                "The saved video model is a two-actor RAVDESS pilot, so it does not "
+                "generalize reliably. Using the image model on sampled video frames "
+                "instead. For a reliable video benchmark, train with CREMA-D or the "
+                "full RAVDESS actor set."
+            )
+        elif vid_model is None:
+            st.warning(
+                "No video-specific model is available. Using the image model on "
+                "sampled frames. Train a broad actor-disjoint video model with "
+                "`python train_video.py` for video-specific performance."
+            )
     else:
         st.error("No model available. Train at least the image model: `python train_image.py`")
         return

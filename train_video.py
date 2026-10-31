@@ -252,6 +252,13 @@ def main() -> None:
     # ── Save ──────────────────────────────────────────────────────────────────
     weights_path, meta_path = save_model(model, class_names, args.image_size,
                                           args.models_dir, "emocraft_video")
+    video_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    video_meta.update({
+        "training_dataset": dataset_note,
+        "training_actors": sorted({r["actor"] for r in train_recs}),
+        "training_clips": len(train_recs),
+    })
+    meta_path.write_text(json.dumps(video_meta, indent=2), encoding="utf-8")
 
     args.outputs_dir.mkdir(parents=True, exist_ok=True)
     _save_curves(history, args.outputs_dir / "video_training_curves.png")

@@ -25,8 +25,9 @@ RAVDESS/
 *.flv
 *.avi
 
-# Intermediate training checkpoints
+# Intermediate training checkpoints (keep local temp checkpoints out, allow saved model weights)
 *.weights.h5
+!models/*.weights.h5
 
 # OS & Editor generated files
 .DS_Store

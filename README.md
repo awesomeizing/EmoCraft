@@ -134,8 +134,9 @@ C:\Users\aweso\AppData\Local\Programs\Python\Python314\python.exe train_image.py
 
 Options:
 ```
---epochs N          (default: 50)
+--epochs N          (default: 50; early stopping selects the best validation epoch)
 --batch-size N      (default: 64)
+--resume            Continue from the saved image model; --epochs is the total target
 --fer-dir PATH      (default: datasets\fer2013)
 --models-dir PATH   (default: models\)
 --no-verify         Skip per-image file validation
@@ -147,6 +148,10 @@ Saved artefacts:
 - `outputs\image_training_curves.png`
 - `outputs\image_confusion_matrix.png`
 - `outputs\image_eval_summary.json`
+
+The image model uses training-only augmentation and a residual CNN. FER2013
+class weights are smoothed so the rare disgust class is represented without
+letting its small sample count overwhelm the other labels.
 
 ### Video model (CREMA-D or RAVDESS fallback)
 
